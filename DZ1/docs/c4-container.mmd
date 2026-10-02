@@ -1,0 +1,65 @@
+C4Container
+    title Container diagram — Marketplace
+
+    Person(buyer, "Покупатель", "Ищет товары, оформляет и оплачивает заказы")
+    Person(seller, "Продавец", "Управляет своими товарами")
+    System_Ext(payment_provider, "Платёжный провайдер", "Проводит платёжные операции")
+    System_Ext(message_provider, "Провайдер сообщений", "Доставляет email, SMS и push")
+
+    System_Boundary(marketplace, "Marketplace") {
+        Container(web, "Web / Mobile UI", "SPA / mobile app", "Пользовательский интерфейс покупателей и продавцов")
+        Container(gateway, "API Gateway", "HTTP reverse proxy", "Единая точка входа, маршрутизация, проверка токена")
+
+        Container(identity, "Identity Service", "Service", "Аккаунты, роли покупателей и продавцов, аутентификация")
+        ContainerDb(identity_db, "Identity DB", "PostgreSQL", "Пользователи, роли и учётные данные")
+
+        Container(catalog, "Catalog Service", "Service", "Карточки товаров, категории, цены и остатки")
+        ContainerDb(catalog_db, "Catalog DB", "PostgreSQL", "Товары, категории, цены и остатки")
+
+        Container(feed, "Feed Service", "Go / HTTP", "Собирает персональную ленту из предпочтений и каталога")
+        ContainerDb(feed_db, "Feed Store", "Key-value / document DB", "Профили интересов и предрассчитанные ленты")
+
+        Container(order, "Order Service", "Service", "Жизненный цикл заказа и состав заказа")
+        ContainerDb(order_db, "Order DB", "PostgreSQL", "Заказы, позиции и снимки цен")
+
+        Container(payment, "Payment Service", "Service", "Рассчитывает сумму к оплате, инициирует платежи и ведёт их учёт")
+        ContainerDb(payment_db, "Payment DB", "PostgreSQL", "Платёжные попытки, статусы и внешние идентификаторы")
+
+        Container(notification, "Notification Service", "Worker", "Формирует и отправляет уведомления о заказах")
+        ContainerDb(notification_db, "Notification DB", "PostgreSQL", "Шаблоны, сообщения и статусы доставки")
+
+        Container(broker, "Event Broker", "Kafka / RabbitMQ", "Асинхронные доменные события")
+    }
+
+    Rel(buyer, web, "Просматривает ленту и оформляет заказы", "HTTPS")
+    Rel(seller, web, "Управляет каталогом", "HTTPS")
+    Rel(web, gateway, "Вызывает API", "HTTPS/JSON")
+
+    Rel(gateway, identity, "Аутентификация и профиль", "Синхронно, HTTP/JSON")
+    Rel(gateway, catalog, "Управление и чтение товаров", "Синхронно, HTTP/JSON")
+    Rel(gateway, feed, "Запрашивает ленту", "Синхронно, HTTP/JSON")
+    Rel(gateway, order, "Создаёт и читает заказы", "Синхронно, HTTP/JSON")
+    Rel(gateway, payment, "Запрашивает состояние платежа", "Синхронно, HTTP/JSON")
+
+    Rel(identity, identity_db, "Читает и записывает", "SQL")
+    Rel(catalog, catalog_db, "Читает и записывает", "SQL")
+    Rel(feed, feed_db, "Читает и записывает", "DB protocol")
+    Rel(order, order_db, "Читает и записывает", "SQL")
+    Rel(payment, payment_db, "Читает и записывает", "SQL")
+    Rel(notification, notification_db, "Читает и записывает", "SQL")
+
+    Rel(feed, catalog, "Получает актуальные детали товаров", "Синхронно, HTTP/JSON")
+    Rel(order, catalog, "Проверяет товары, цену и резерв", "Синхронно, HTTP/JSON")
+    Rel(order, payment, "Инициирует оплату", "Синхронно, HTTP/JSON")
+    Rel(payment, payment_provider, "Создаёт платёж / получает callback", "HTTPS")
+    Rel(notification, message_provider, "Отправляет сообщения", "HTTPS")
+
+    Rel(identity, broker, "Публикует UserUpdated", "Асинхронно")
+    Rel(catalog, broker, "Публикует ProductChanged", "Асинхронно")
+    Rel(order, broker, "Публикует OrderStatusChanged", "Асинхронно")
+    Rel(payment, broker, "Публикует PaymentStatusChanged", "Асинхронно")
+    Rel(broker, feed, "Доставляет UserUpdated, ProductChanged, OrderStatusChanged", "Асинхронно")
+    Rel(broker, order, "Доставляет PaymentStatusChanged", "Асинхронно")
+    Rel(broker, notification, "Доставляет OrderStatusChanged", "Асинхронно")
+
+    UpdateLayoutConfig($c4ShapeInRow="4", $c4BoundaryInRow="1")
