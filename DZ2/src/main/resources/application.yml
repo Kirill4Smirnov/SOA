@@ -1,0 +1,32 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/marketplace}
+    username: ${DB_USER:marketplace}
+    password: ${DB_PASSWORD:marketplace}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+  flyway:
+    enabled: true
+  jackson:
+    default-property-inclusion: non_null
+
+app:
+  jwt:
+    secret: ${JWT_SECRET:change-me-change-me-change-me-change-me}
+    access-ttl: ${ACCESS_TOKEN_TTL:PT20M}
+    refresh-ttl: ${REFRESH_TOKEN_TTL:P14D}
+  order:
+    operation-cooldown: ${ORDER_OPERATION_COOLDOWN:PT1M}
+
+logging:
+  pattern:
+    console: "%msg%n"

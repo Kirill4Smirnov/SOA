@@ -1,0 +1,39 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: marketplace
+      POSTGRES_USER: marketplace
+      POSTGRES_PASSWORD: marketplace
+    ports:
+      - "5432:5432"
+    volumes:
+      - marketplace-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U marketplace -d marketplace"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  app:
+    build: .
+    environment:
+      DB_URL: jdbc:postgresql://postgres:5432/marketplace
+      DB_USER: marketplace
+      DB_PASSWORD: marketplace
+      JWT_SECRET: local-development-secret-at-least-32-bytes
+      ORDER_OPERATION_COOLDOWN: PT1M
+    ports:
+      - "8080:8080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://127.0.0.1:8080/health"]
+      interval: 5s
+      timeout: 3s
+      retries: 15
+      start_period: 15s
+
+volumes:
+  marketplace-data:
