@@ -1,0 +1,39 @@
+server:
+  port: ${HTTP_PORT:8081}
+
+grpc:
+  server:
+    port: ${GRPC_PORT:9090}
+
+spring:
+  application:
+    name: flight-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5433/flights}
+    username: ${DB_USER:flight}
+    password: ${DB_PASSWORD:flight}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  data:
+    redis:
+      sentinel:
+        master: ${REDIS_SENTINEL_MASTER:mymaster}
+        nodes: ${REDIS_SENTINEL_NODES:localhost:26379}
+      timeout: 2s
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+flight:
+  grpc:
+    api-key: ${FLIGHT_GRPC_API_KEY:development-secret}
+  cache:
+    ttl: ${FLIGHT_CACHE_TTL:10m}
+

@@ -1,0 +1,50 @@
+### Healthcheck
+GET http://localhost:8080/health
+Accept: application/json
+
+### Поиск рейсов на дату
+GET http://localhost:8080/flights?origin=SVO&destination=LED&date=2026-04-01
+Accept: application/json
+
+### Поиск рейсов без фильтра по дате
+GET http://localhost:8080/flights?origin=SVO&destination=LED
+Accept: application/json
+
+### Получение тестового рейса
+GET http://localhost:8080/flights/11111111-1111-1111-1111-111111111111
+Accept: application/json
+
+### Создание бронирования
+POST http://localhost:8080/bookings
+Content-Type: application/json
+Accept: application/json
+
+{
+  "user_id": "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",
+  "flight_id": "11111111-1111-1111-1111-111111111111",
+  "passenger_name": "Ivan Petrov",
+  "passenger_email": "ivan@example.com",
+  "seat_count": 2
+}
+
+> {% client.global.set("booking_id", response.body.id); %}
+
+### Получение созданного бронирования
+GET http://localhost:8080/bookings/{{booking_id}}
+Accept: application/json
+
+### Список бронирований пользователя
+GET http://localhost:8080/bookings?user_id=aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+Accept: application/json
+
+### Отмена созданного бронирования
+POST http://localhost:8080/bookings/{{booking_id}}/cancel
+Accept: application/json
+
+### Проверка 404
+GET http://localhost:8080/flights/aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa
+Accept: application/json
+
+### Проверка валидации: отсутствует destination
+GET http://localhost:8080/flights?origin=SVO
+Accept: application/json

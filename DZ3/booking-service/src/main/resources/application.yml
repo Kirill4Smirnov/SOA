@@ -1,0 +1,48 @@
+server:
+  port: ${HTTP_PORT:8080}
+
+spring:
+  application:
+    name: booking-service
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/bookings}
+    username: ${DB_USER:booking}
+    password: ${DB_PASSWORD:booking}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
+  flyway:
+    enabled: true
+  jackson:
+    property-naming-strategy: SNAKE_CASE
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  api-docs:
+    path: /v3/api-docs
+
+flight:
+  grpc:
+    host: ${FLIGHT_GRPC_HOST:localhost}
+    port: ${FLIGHT_GRPC_PORT:9090}
+    api-key: ${FLIGHT_GRPC_API_KEY:development-secret}
+    deadline: ${FLIGHT_GRPC_DEADLINE:2s}
+    retry:
+      max-attempts: ${GRPC_RETRY_MAX_ATTEMPTS:3}
+      initial-backoff: ${GRPC_RETRY_INITIAL_BACKOFF:100ms}
+    circuit-breaker:
+      failure-threshold: ${CB_FAILURE_THRESHOLD:5}
+      open-timeout: ${CB_OPEN_TIMEOUT:15s}
+      window-size: ${CB_WINDOW_SIZE:10}
+
+

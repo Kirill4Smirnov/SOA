@@ -1,0 +1,50 @@
+erDiagram
+    AIRLINE {
+        varchar_3 code PK "IATA/ICAO-like code"
+        varchar_120 name UK
+    }
+    AIRPORT {
+        varchar_3 code PK "IATA code"
+        varchar_120 name
+        varchar_120 city
+    }
+    FLIGHT {
+        uuid id PK
+        varchar_10 flight_number
+        varchar_3 airline_code FK
+        varchar_3 origin_code FK
+        varchar_3 destination_code FK
+        timestamptz departure_time
+        timestamptz arrival_time
+        integer total_seats
+        integer available_seats
+        numeric price
+        flight_status status
+    }
+    SEAT_RESERVATION {
+        uuid id PK
+        uuid flight_id FK
+        uuid booking_id UK "external reference"
+        integer seat_count
+        reservation_status status
+        timestamptz created_at
+        timestamptz released_at
+    }
+    BOOKING {
+        uuid id PK
+        uuid user_id
+        uuid flight_id "external reference"
+        varchar passenger_name
+        varchar passenger_email
+        integer seat_count
+        numeric total_price
+        booking_status status
+        timestamptz created_at
+        timestamptz cancelled_at
+    }
+
+    AIRLINE ||--o{ FLIGHT : operates
+    AIRPORT ||--o{ FLIGHT : origin
+    AIRPORT ||--o{ FLIGHT : destination
+    FLIGHT ||--o{ SEAT_RESERVATION : has
+
