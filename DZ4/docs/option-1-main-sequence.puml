@@ -1,0 +1,48 @@
+@startuml option_1_main_sequence
+title Вариант 1: основной сценарий доставки через push
+autonumber
+
+actor "Business Service" as source
+participant "Notification API" as api
+database "PostgreSQL" as db
+participant "Outbox Relay" as relay
+queue "Kafka" as kafka
+participant "Delivery Orchestrator" as orch
+participant "Preference Service" as pref
+participant "Push Worker" as worker
+participant "Push Provider" as provider
+participant "Callback Gateway" as callback
+actor "Mobile App" as app
+
+source -> api : POST /notifications\n(event_id, user_id, CRITICAL, template)
+api -> db : BEGIN
+api -> db : INSERT notification\nUNIQUE(source, event_id)
+api -> db : INSERT outbox(CriticalNotificationAccepted)
+api -> db : COMMIT
+api --> source : 202 Accepted(notification_id)
+
+relay -> db : claim unpublished outbox
+relay -> kafka : CriticalNotificationAccepted\nacks=all
+kafka -> orch : consume command
+orch -> pref : get contacts and channel order
+pref --> orch : push, SMS, email
+orch -> db : transaction:\nstate=WAITING_RECEIPT, create attempt + outbox
+relay -> kafka : SendPush(attempt_id)
+kafka -> worker : consume SendPush
+worker -> provider : send(payload, idempotency_key=attempt_id)
+provider --> worker : accepted(provider_message_id)
+worker -> kafka : AttemptAccepted
+provider -> app : push notification
+app -> callback : delivery ACK(attempt_id)
+callback -> callback : verify signature / schema
+callback -> db : transaction: receipt inbox + outbox
+callback --> app : 204 receipt accepted
+relay -> db : claim receipt outbox
+relay -> kafka : DeliverySucceeded(attempt_id)
+kafka -> orch : consume result
+orch -> db : conditional transaction:\nstate=DELIVERED, delivered_channel=PUSH
+note right of orch
+  Offset подтверждается только после
+  фиксации inbox и изменения состояния.
+end note
+@enduml

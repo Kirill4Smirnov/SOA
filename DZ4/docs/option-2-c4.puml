@@ -1,0 +1,71 @@
+@startuml option_2_c4
+title Вариант 2: Temporal Durable Workflow (C4 Container)
+
+skinparam shadowing false
+skinparam rectangle {
+  BackgroundColor #1168BD
+  BorderColor #0B4884
+  FontColor white
+}
+skinparam database {
+  BackgroundColor #1168BD
+  BorderColor #0B4884
+  FontColor white
+}
+skinparam queue {
+  BackgroundColor #1168BD
+  BorderColor #0B4884
+  FontColor white
+}
+
+actor "Клиент банка" as user
+rectangle "Бизнес-сервисы банка\n<<External system>>" as sources #777777
+rectangle "Profile / Preferences\n<<External system>>" as profile #777777
+cloud "Push / SMS / Email providers\n<<External systems>>" as providers #777777
+
+package "Notification Platform" {
+  rectangle "Notification API\n<<Container: Spring Boot>>" as api
+  database "Ingress DB\n<<Container: PostgreSQL>>\nInbox / outbox" as ingress_db
+  rectangle "Outbox Relay\n<<Container>>\nНадёжная публикация команд" as outbox_relay
+  queue "Apache Kafka\n<<Container>>\ncritical / bulk topics" as kafka
+  rectangle "Workflow Starter\n<<Container>>\nStartWorkflow(notification_id)" as starter
+  rectangle "Temporal Cluster\n<<Container>>\nFrontend, History, Matching" as temporal
+  database "Temporal Persistence\n<<Container: Cassandra>>\nWorkflow event history" as cassandra
+  rectangle "Critical Workflow Workers\n<<Container: Temporal SDK>>\nPolicy, timers, channel activities" as workers
+  rectangle "Callback Gateway\n<<Container>>\nReceipt -> SignalWorkflow" as callback
+  rectangle "Signal Relay\n<<Container>>\nRetry durable receipt signals" as signal_relay
+  rectangle "Audit Projector\n<<Container>>" as projector
+  database "Audit Read Model\n<<Container: PostgreSQL>>" as audit
+  database "OpenSearch\n<<Container>>\nTemporal visibility" as visibility
+  rectangle "Observability\n<<Container>>" as obs
+}
+
+sources --> api : notification command\nHTTPS + event_id
+api --> ingress_db : transaction: inbox + outbox
+outbox_relay --> ingress_db : claim command outbox
+outbox_relay --> kafka : publish, acks=all
+kafka --> starter : critical command
+starter --> temporal : StartWorkflow\nworkflow_id=notification_id
+temporal --> cassandra : workflow history
+temporal --> visibility : visibility records
+temporal --> workers : workflow/activity task queues
+workers --> temporal : completions, durable timers
+workers --> profile : contacts and preferences
+workers --> providers : send(attempt_id)
+providers --> callback : delivery receipt
+callback --> ingress_db : receipt inbox + outbox\nbefore provider ACK
+signal_relay --> ingress_db : claim receipt outbox
+signal_relay --> temporal : SignalWorkflow(receipt)
+temporal --> projector : workflow events
+projector --> audit : delivery audit / status
+temporal --> obs
+workers --> obs
+providers --> user : notification
+
+legend right
+  |= C4 element |= Meaning |
+  | Person | Клиент банка |
+  | External system | Система вне границы платформы |
+  | Container | Отдельно развёртываемый компонент/хранилище |
+endlegend
+@enduml

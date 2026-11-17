@@ -1,0 +1,79 @@
+@startuml option_1_c4
+title Вариант 1: Kafka + PostgreSQL Delivery Orchestrator (C4 Container)
+
+skinparam shadowing false
+skinparam rectangle {
+  BackgroundColor #1168BD
+  BorderColor #0B4884
+  FontColor white
+}
+skinparam database {
+  BackgroundColor #1168BD
+  BorderColor #0B4884
+  FontColor white
+}
+skinparam queue {
+  BackgroundColor #1168BD
+  BorderColor #0B4884
+  FontColor white
+}
+
+actor "Клиент банка" as user
+rectangle "Бизнес-сервисы банка\n<<External system>>" as sources #777777
+rectangle "Profile / Preferences\n<<External system>>" as profile #777777
+cloud "Push provider" as push #777777
+cloud "SMS provider(s)" as sms #777777
+cloud "Email provider" as email #777777
+
+package "Notification Platform" {
+  rectangle "Notification API\n<<Container: Spring Boot>>\nПриём, валидация, status API" as api
+  rectangle "Outbox Relay\n<<Container>>\nНадёжная публикация" as relay
+  queue "Apache Kafka\n<<Container>>\ncritical / bulk / channel / result topics" as kafka
+  rectangle "Delivery Orchestrator\n<<Container: Spring Boot>>\nАвтомат состояний и policy" as orchestrator
+  rectangle "Retry Scheduler\n<<Container>>\nDeadlines и due work" as scheduler
+  rectangle "Push Worker\n<<Container>>" as push_worker
+  rectangle "SMS Worker\n<<Container>>" as sms_worker
+  rectangle "Email Worker\n<<Container>>" as email_worker
+  rectangle "Callback Gateway\n<<Container>>\nПроверка и нормализация receipt" as callback
+  database "Notification DB\n<<Container: PostgreSQL>>\nNotification, attempt, inbox/outbox, audit" as db
+  database "Redis Cluster\n<<Container>>\nPreference cache, rate limit" as redis
+  rectangle "Observability\n<<Container>>\nOTel, Prometheus, Grafana, Loki/Tempo" as obs
+}
+
+sources --> api : POST notification\nHTTPS + event_id
+api --> db : transaction: notification + outbox
+api --> redis : quotas / cache
+relay --> db : read unpublished outbox
+relay --> kafka : publish, acks=all
+kafka --> orchestrator : critical commands / results
+orchestrator --> profile : contacts and preferences
+orchestrator --> db : state, attempts, inbox/outbox
+orchestrator --> redis : cached preferences / circuit state
+scheduler --> db : claim due work\nFOR UPDATE SKIP LOCKED
+scheduler --> kafka : retry / timeout event
+kafka --> push_worker : push command
+kafka --> sms_worker : SMS command
+kafka --> email_worker : email command
+push_worker --> push : send(attempt_id)
+sms_worker --> sms : send(attempt_id)
+email_worker --> email : send(attempt_id)
+push --> callback : delivery receipt
+sms --> callback : delivery receipt
+email --> callback : delivery receipt
+callback --> db : receipt inbox + outbox\nbefore provider ACK
+relay --> kafka : normalized receipt result
+push_worker --> obs
+sms_worker --> obs
+email_worker --> obs
+orchestrator --> obs
+user <-- push : push
+user <-- sms : SMS
+user <-- email : email
+
+legend right
+  |= C4 element |= Meaning |
+  | Person | Клиент банка |
+  | External system | Система вне границы платформы |
+  | Container | Отдельно развёртываемый компонент/хранилище |
+endlegend
+@enduml

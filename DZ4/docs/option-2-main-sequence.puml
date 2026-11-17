@@ -1,0 +1,46 @@
+@startuml option_2_main_sequence
+title Вариант 2: основной сценарий доставки через Temporal
+autonumber
+
+actor "Business Service" as source
+participant "Notification API" as api
+database "Ingress PostgreSQL" as db
+participant "Outbox Relay" as relay
+queue "Kafka" as kafka
+participant "Workflow Starter" as starter
+participant "Temporal Cluster" as temporal
+participant "Workflow Worker" as worker
+participant "Preference Service" as pref
+participant "Push Provider" as push
+participant "Callback Gateway" as callback
+participant "Signal Relay" as signal_relay
+participant "Audit Projector" as projector
+database "Audit Read Model" as audit
+
+source -> api : POST /notifications(event_id, ...)
+api -> db : transaction: inbox + notification + outbox
+api --> source : 202 Accepted(notification_id)
+relay -> db : claim unpublished outbox
+relay -> kafka : publish critical command
+kafka -> starter : critical command
+starter -> temporal : StartWorkflow(workflow_id=notification_id)
+note right of temporal
+  Повторный StartWorkflow с тем же ID
+  не создаёт второй активный процесс.
+end note
+temporal -> worker : workflow task
+worker -> pref : activity: contacts/preferences
+pref --> worker : push, SMS, email
+worker -> push : activity: send(idempotency_key=P1)
+push --> worker : accepted
+worker -> temporal : activity completed; start durable timer
+push -> callback : delivery receipt(P1)
+callback -> db : transaction: receipt inbox + outbox
+callback --> push : 204 receipt accepted
+signal_relay -> db : claim receipt outbox
+signal_relay -> temporal : SignalWorkflow(DeliverySucceeded, P1)
+temporal -> worker : workflow task with signal
+worker -> temporal : complete workflow(DELIVERED/PUSH)
+temporal -> projector : workflow event
+projector -> audit : update status and attempt history
+@enduml

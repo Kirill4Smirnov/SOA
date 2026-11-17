@@ -1,0 +1,47 @@
+@startuml option_2_failover_sequence
+title Вариант 2: таймер ожидания и переключение на SMS
+autonumber
+
+participant "Temporal Cluster" as temporal
+participant "Workflow Worker" as worker
+participant "Push Provider" as push
+participant "SMS Provider" as sms
+participant "Callback Gateway" as callback
+participant "Signal Relay" as signal_relay
+database "Ingress PostgreSQL" as db
+participant "Audit Projector" as projector
+database "Audit Read Model" as audit
+
+temporal -> worker : workflow task: dispatch primary
+worker -> push : activity sendPush(attempt_id=P1)
+push --> worker : accepted
+worker -> temporal : record result and durable timer(5s)
+
+note over temporal,push
+  Worker может перезапуститься: timer и history
+  хранятся в Temporal, а workflow replay восстанавливает состояние.
+end note
+
+temporal -> worker : timer fired; no success signal
+worker -> sms : activity sendSms(attempt_id=S1)
+sms --> worker : accepted
+worker -> temporal : activity result; durable timer(45s)
+sms -> callback : DELIVERED(S1)
+callback -> db : transaction: receipt inbox + outbox
+callback --> sms : 204 receipt accepted
+signal_relay -> db : claim receipt outbox
+signal_relay -> temporal : SignalWorkflow(DeliverySucceeded, S1)
+temporal -> worker : workflow task with signal
+worker -> temporal : complete workflow(DELIVERED/SMS)
+temporal -> projector : workflow event
+projector -> audit : project final status
+
+opt поздний push receipt
+  push -> callback : DELIVERED(P1)
+  callback -> db : transaction: late receipt inbox + outbox
+  signal_relay -> temporal : SignalWorkflow(P1)
+  temporal --> signal_relay : workflow already closed
+  signal_relay -> projector : late receipt event
+  projector -> audit : append late receipt, no new delivery
+end
+@enduml

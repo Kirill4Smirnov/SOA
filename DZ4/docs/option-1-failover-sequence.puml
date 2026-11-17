@@ -1,0 +1,57 @@
+@startuml option_1_failover_sequence
+title Вариант 1: push не подтвердился вовремя, переключаемся на SMS
+autonumber
+
+queue "Kafka" as kafka
+participant "Delivery Orchestrator" as orch
+database "PostgreSQL" as db
+participant "Push Worker" as push_worker
+participant "Push Provider" as push
+participant "Retry Scheduler" as scheduler
+participant "Outbox Relay" as relay
+participant "SMS Worker" as sms_worker
+participant "SMS Provider" as sms
+participant "Callback Gateway" as callback
+
+orch -> db : create PUSH attempt\ndeadline=now+5s
+orch -> kafka : SendPush(attempt_id=P1)
+kafka -> push_worker : SendPush(P1)
+push_worker -> push : send(idempotency_key=P1)
+push --> push_worker : accepted
+note over push,callback
+  Delivery receipt не пришёл
+  до сохранённого deadline.
+end note
+
+scheduler -> db : SELECT due attempt\nFOR UPDATE SKIP LOCKED
+scheduler -> db : mark timeout event enqueued + outbox
+relay -> db : claim timeout outbox
+relay -> kafka : AttemptTimedOut(P1)
+kafka -> orch : AttemptTimedOut(P1)
+orch -> db : atomic transition:\nWAITING_PUSH -> WAITING_SMS\ncreate SMS attempt S1
+orch -> db : INSERT outbox SendSms(S1)
+relay -> db : claim SendSms outbox
+relay -> kafka : SendSms(S1)
+kafka -> sms_worker : SendSms(S1)
+sms_worker -> sms : send(idempotency_key=S1)
+sms --> sms_worker : accepted
+sms -> callback : DELIVERED(S1)
+callback -> db : transaction: receipt inbox + outbox
+callback --> sms : 204 receipt accepted
+relay -> db : claim receipt outbox
+relay -> kafka : DeliverySucceeded(S1)
+kafka -> orch : DeliverySucceeded(S1)
+orch -> db : WAITING_SMS -> DELIVERED\nchannel=SMS
+
+opt поздний push receipt
+  push -> callback : DELIVERED(P1)
+  callback -> db : transaction: receipt inbox + outbox
+  relay -> kafka : DeliverySucceeded(P1)
+  kafka -> orch : late result
+  orch -> db : append audit; no new transition
+  note right of orch
+    Уже отправленный SMS отозвать нельзя.
+    Условный update не запускает новый канал.
+  end note
+end
+@enduml
