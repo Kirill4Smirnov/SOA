@@ -1,0 +1,33 @@
+@movie = http://localhost:8080
+@analytics = http://localhost:8082
+@date = 2026-11-20
+
+### Отправить событие. Повтор с тем же event_id не увеличит метрики.
+POST {{movie}}/events
+Content-Type: application/json
+
+{
+  "event_id": "d4b2a314-37dd-4c99-9769-b6f2f69db901",
+  "user_id": "manual-user",
+  "movie_id": "movie-1",
+  "event_type": "VIEW_STARTED",
+  "timestamp": "2026-11-20T12:00:00Z",
+  "device_type": "TV",
+  "session_id": "manual-session",
+  "progress_seconds": 0
+}
+
+### Сгенерировать историю с несколькими когортами
+POST {{movie}}/generate
+Content-Type: application/json
+
+{"users": 8, "days": 10}
+
+### Пересчитать конкретный день
+POST {{analytics}}/recompute?date={{date}}
+
+### Прочитать метрики из PostgreSQL
+GET {{analytics}}/metrics?date={{date}}
+
+### Выгрузить метрики PostgreSQL в S3
+POST {{analytics}}/exports?date={{date}}

@@ -1,0 +1,57 @@
+{
+  "uid": "cinema-analytics",
+  "title": "Online Cinema Analytics",
+  "schemaVersion": 40,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-14d", "to": "now"},
+  "panels": [
+    {
+      "id": 1,
+      "title": "Retention cohort: Day 0-7",
+      "description": "Cohort = first VIEW_STARTED (UTC). Return = any event. Future days are null. Today is provisional.",
+      "type": "table",
+      "datasource": {"type": "grafana-clickhouse-datasource", "uid": "clickhouse"},
+      "gridPos": {"x": 0, "y": 0, "w": 24, "h": 10},
+      "targets": [{"refId": "A", "queryType": "table", "editorType": "sql", "rawSql": "SELECT metric_date AS Cohort, maxIf(value,dimension='0') AS `Day 0`, maxIf(value,dimension='1') AS `Day 1`, maxIf(value,dimension='2') AS `Day 2`, maxIf(value,dimension='3') AS `Day 3`, maxIf(value,dimension='4') AS `Day 4`, maxIf(value,dimension='5') AS `Day 5`, maxIf(value,dimension='6') AS `Day 6`, maxIf(value,dimension='7') AS `Day 7` FROM cinema.metrics_current WHERE metric_name='retention' AND metric_date >= toDate($__fromTime) AND metric_date <= toDate($__toTime) GROUP BY metric_date ORDER BY metric_date"}],
+      "fieldConfig": {
+        "defaults": {"custom": {"align": "center"}},
+        "overrides": [{"matcher": {"id": "byRegexp", "options": "^Day [0-7]$"}, "properties": [
+          {"id": "unit", "value": "percentunit"}, {"id": "min", "value": 0}, {"id": "max", "value": 1},
+          {"id": "decimals", "value": 1}, {"id": "noValue", "value": ""},
+          {"id": "custom.cellOptions", "value": {"type": "color-background", "mode": "gradient"}},
+          {"id": "color", "value": {"mode": "continuous-RdYlGr"}}
+        ]}]
+      },
+      "options": {"showHeader": true, "cellHeight": "sm"}
+    },
+    {
+      "id": 2, "title": "DAU", "type": "timeseries",
+      "datasource": {"type": "grafana-clickhouse-datasource", "uid": "clickhouse"},
+      "gridPos": {"x": 0, "y": 10, "w": 12, "h": 8},
+      "targets": [{"refId": "A", "queryType": "timeseries", "editorType": "sql", "rawSql": "SELECT toDateTime(metric_date,'UTC') AS time, value AS DAU FROM cinema.metrics_current WHERE metric_name='dau' AND metric_date >= toDate($__fromTime) AND metric_date <= toDate($__toTime) ORDER BY time"}],
+      "fieldConfig": {"defaults": {"min": 0, "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 3, "title": "View conversion", "type": "timeseries",
+      "datasource": {"type": "grafana-clickhouse-datasource", "uid": "clickhouse"},
+      "gridPos": {"x": 12, "y": 10, "w": 12, "h": 8},
+      "targets": [{"refId": "A", "queryType": "timeseries", "editorType": "sql", "rawSql": "SELECT toDateTime(metric_date,'UTC') AS time, value AS Conversion FROM cinema.metrics_current WHERE metric_name='conversion' AND metric_date >= toDate($__fromTime) AND metric_date <= toDate($__toTime) ORDER BY time"}],
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0}, "overrides": []}
+    },
+    {
+      "id": 4, "title": "Top movies by started views", "type": "barchart",
+      "datasource": {"type": "grafana-clickhouse-datasource", "uid": "clickhouse"},
+      "gridPos": {"x": 0, "y": 18, "w": 12, "h": 8},
+      "targets": [{"refId": "A", "queryType": "table", "editorType": "sql", "rawSql": "SELECT dimension AS Movie, sum(value) AS Views FROM cinema.metrics_current WHERE metric_name='movie_views' AND metric_date >= toDate($__fromTime) AND metric_date <= toDate($__toTime) GROUP BY Movie ORDER BY Views DESC, Movie LIMIT 10"}],
+      "fieldConfig": {"defaults": {"min": 0, "decimals": 0}, "overrides": []}
+    },
+    {
+      "id": 5, "title": "Average completed watch time", "type": "timeseries",
+      "datasource": {"type": "grafana-clickhouse-datasource", "uid": "clickhouse"},
+      "gridPos": {"x": 12, "y": 18, "w": 12, "h": 8},
+      "targets": [{"refId": "A", "queryType": "timeseries", "editorType": "sql", "rawSql": "SELECT toDateTime(metric_date,'UTC') AS time, value AS Seconds FROM cinema.metrics_current WHERE metric_name='average_watch_seconds' AND metric_date >= toDate($__fromTime) AND metric_date <= toDate($__toTime) ORDER BY time"}],
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0}, "overrides": []}
+    }
+  ]
+}
